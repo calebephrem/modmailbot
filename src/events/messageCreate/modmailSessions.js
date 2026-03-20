@@ -155,9 +155,10 @@ export default async (client, message) => {
       }
     }
 
-    await thread.send({ embeds: [embed] });
+    const sent = await thread.send({ embeds: [embed] });
+    await message.react("✅");
   } catch (err) {
-    console.error("Modmail error:", err);
-    await message.reply("Failed to send modmail.");
+    console.error("Failed to forward user message:", err);
+    await message.react("❌").catch(() => null);
   }
 };
