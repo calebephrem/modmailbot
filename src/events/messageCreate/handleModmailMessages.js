@@ -1,8 +1,10 @@
 import { EmbedBuilder } from "discord.js";
 import getConfig from "../../utils/getConfig.js";
+import { prefixes } from "./handleCommands.js";
 
 export default async (client, message) => {
   if (message.author.bot) return;
+  if (prefixes.some((p) => message.content.startsWith(p))) return;
 
   const config = await getConfig();
 
