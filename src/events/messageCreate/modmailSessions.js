@@ -109,7 +109,10 @@ export default async (client, message) => {
 
         thread = await forum.threads.create({
           name: `${message.author.username} (${message.author.id})`,
-          message: { embeds: [starter] },
+          message: {
+            content: `<@&${config.moderatorRole}> New modmail opened!`,
+            embeds: [starter],
+          },
         });
 
         modmailCache.set(message.author.id, thread.id);

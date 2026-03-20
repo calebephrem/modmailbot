@@ -23,7 +23,7 @@ export default async (client, message) => {
   if (!user) return;
 
   const embed = new EmbedBuilder()
-    .setAuthor({ name: `Support • ${message.guild?.name || "Server"}` })
+    .setAuthor({ name: `Staff ⚔️ ${message.guild?.name || "Server"}` })
     .setColor(0x5865f2)
     .setTimestamp();
 
