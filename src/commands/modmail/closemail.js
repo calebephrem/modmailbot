@@ -37,7 +37,7 @@ export default {
                 new EmbedBuilder()
                   .setTitle("Modmail Closed")
                   .setDescription(
-                    "Your modmail thread has been closed by the moderators.",
+                    "Your modmail thread has been closed. Feel free to open another one if you need help.",
                   )
                   .setColor(0x5865f2),
               ],
