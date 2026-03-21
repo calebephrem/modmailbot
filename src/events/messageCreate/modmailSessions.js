@@ -118,8 +118,16 @@ export default async (client, message) => {
         modmailCache.set(message.author.id, thread.id);
 
         await i.update({
-          content: "✅ Sent to moderators.",
-          embeds: [],
+          embeds: [
+            new EmbedBuilder()
+              .setTitle("✅ Modmail Sent")
+              .setDescription(
+                "Your message has been forwarded to the moderators.",
+              )
+              .setColor(0x5865f2)
+              .setTimestamp(),
+          ],
+          content: "",
           components: [],
         });
       });
