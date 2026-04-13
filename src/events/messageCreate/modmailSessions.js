@@ -1,11 +1,12 @@
 import {
   ChannelType,
   EmbedBuilder,
-  ButtonStyle,
   ButtonBuilder,
+  ButtonStyle,
   ActionRowBuilder,
 } from "discord.js";
 import getConfig from "../../utils/getConfig.js";
+import crypto from "crypto";
 
 export const modmailCache = new Map();
 
@@ -15,15 +16,18 @@ export default async (client, message) => {
 
   try {
     const config = await getConfig();
-    const forum = await client.channels
-      .fetch(config.modmailForumChannelId)
+    const parent = await client.channels
+      .fetch(config.modmailChannelId)
       .catch(() => null);
-    if (!forum) return;
+    if (!parent) return;
 
     let thread = null;
-    const cachedId = modmailCache.get(message.author.id);
-    if (cachedId) {
-      thread = await client.channels.fetch(cachedId).catch(() => null);
+
+    if (modmailCache.has(message.author.id)) {
+      thread = await client.channels
+        .fetch(modmailCache.get(message.author.id))
+        .catch(() => null);
+
       if (!thread || thread.archived || thread.locked) {
         modmailCache.delete(message.author.id);
         thread = null;
@@ -32,7 +36,7 @@ export default async (client, message) => {
 
     if (!thread) {
       const preview = new EmbedBuilder()
-        .setTitle("📩 Modmail Preview")
+        .setTitle("Modmail Preview")
         .setColor(0x5865f2)
         .setAuthor({
           name: message.author.tag,
@@ -40,56 +44,96 @@ export default async (client, message) => {
         })
         .setTimestamp();
 
-      if (message.content) {
-        preview.addFields({ name: "Message", value: message.content });
-      }
+      if (message.content) preview.setDescription(message.content);
+
       if (message.attachments.size > 0) {
-        const first = message.attachments.first();
-        if (first.contentType?.startsWith("image/")) {
-          preview.setImage(first.url);
+        const file = message.attachments.first();
+        if (file.contentType?.startsWith("image/")) {
+          preview.setImage(file.url);
         } else {
-          preview.addFields({
-            name: "Attachment",
-            value: first.url,
-          });
+          preview.addFields({ name: "Attachment", value: file.url });
         }
       }
 
       const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-          .setCustomId("modmail_confirm")
-          .setLabel("✅ Continue")
+          .setCustomId("confirm")
+          .setLabel("Continue")
+          .setEmoji("✅")
           .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
-          .setCustomId("modmail_cancel")
-          .setLabel("❌ Cancel")
+          .setCustomId("cancel")
+          .setLabel("Cancel")
+          .setEmoji("❌")
           .setStyle(ButtonStyle.Secondary),
       );
 
-      const reply = await message.reply({
+      const msg = await message.reply({
         embeds: [preview],
         components: [row],
       });
 
-      const filter = (i) =>
-        i.user.id === message.author.id &&
-        ["modmail_confirm", "modmail_cancel"].includes(i.customId);
-
-      const collector = reply.createMessageComponentCollector({
-        filter,
+      const collector = msg.createMessageComponentCollector({
         time: 30000,
+        max: 1,
       });
 
       collector.on("collect", async (i) => {
-        if (i.customId === "modmail_cancel") {
-          return i.update({
-            content: "Cancelled.",
+        if (i.user.id !== message.author.id) return;
+
+        await i.deferUpdate();
+
+        if (i.customId === "cancel") {
+          return msg.edit({
+            content: "Cancelled",
             embeds: [],
             components: [],
           });
         }
 
-        const starter = new EmbedBuilder()
+        const id = crypto.randomBytes(4).toString("hex");
+
+        const modmailEmbed = new EmbedBuilder()
+          .setTitle("New Modmail")
+          .setColor(0x5865f2)
+          .setThumbnail(message.author.displayAvatarURL())
+          .addFields(
+            { name: "User", value: `<@${message.author.id}>`, inline: true },
+            { name: "User Tag", value: message.author.tag, inline: true },
+            { name: "Modmail ID", value: `${id}`, inline: true },
+            {
+              name: "Timestamp",
+              value: `<t:${Math.floor(Date.now() / 1000)}:R>`,
+              inline: true,
+            },
+          )
+          .setFooter({ text: `uid: ${message.author.id}` })
+          .setTimestamp();
+
+        if (message.attachments.size > 0) {
+          const file = message.attachments.first();
+          if (file.contentType?.startsWith("image/")) {
+            modmailEmbed.setImage(file.url);
+          } else {
+            modmailEmbed.addFields({
+              name: "Attachment",
+              value: file.url,
+            });
+          }
+        }
+
+        const threadMsg = await parent.send({
+          content: `new modmail by <@${message.author.id}>\n-# #${id}`,
+          embeds: [modmailEmbed],
+        });
+
+        thread = await threadMsg.startThread({
+          name: `${message.author.tag} | ${message.author.id}`,
+        });
+
+        modmailCache.set(message.author.id, thread.id);
+
+        const firstEmbed = new EmbedBuilder()
           .setAuthor({
             name: message.author.tag,
             iconURL: message.author.displayAvatarURL(),
@@ -97,45 +141,42 @@ export default async (client, message) => {
           .setColor(0x2b2d31)
           .setTimestamp();
 
-        if (message.content) starter.setDescription(message.content);
+        if (message.content) firstEmbed.setDescription(message.content);
+
         if (message.attachments.size > 0) {
-          const first = message.attachments.first();
-          if (first.contentType?.startsWith("image/")) {
-            starter.setImage(first.url);
+          const file = message.attachments.first();
+          if (file.contentType?.startsWith("image/")) {
+            firstEmbed.setImage(file.url);
           } else {
-            starter.addFields({ name: "Attachment", value: first.url });
+            firstEmbed.addFields({ name: "Attachment", value: file.url });
           }
         }
 
-        thread = await forum.threads.create({
-          name: `${message.author.username} (${message.author.id})`,
-          message: {
-            content: `<@&${config.moderatorRole}> New modmail opened!`,
-            embeds: [starter],
-          },
-        });
+        await thread.send({ embeds: [firstEmbed] });
 
-        modmailCache.set(message.author.id, thread.id);
-
-        await i.update({
+        await msg.edit({
           embeds: [
             new EmbedBuilder()
-              .setTitle("✅ Modmail Sent")
-              .setDescription(
-                "Your message has been forwarded to the moderators.",
+              .setTitle("✅ Modmail thread created")
+              .setFields(
+                { name: "Modmail ID", value: `${id}`, inline: true },
+                {
+                  name: "Timestamp",
+                  value: `<t:${Math.floor(Date.now() / 1000)}:R>`,
+                  inline: true,
+                },
               )
-              .setColor(0x5865f2)
-              .setTimestamp(),
+              .setColor(0x5865f2),
           ],
-          content: "",
           components: [],
+          content: "",
         });
       });
 
-      collector.on("end", async (c) => {
-        if (c.size === 0) {
-          await reply.edit({
-            content: "Timed out.",
+      collector.on("end", async (collected) => {
+        if (collected.size === 0) {
+          await msg.edit({
+            content: "Timed out",
             embeds: [],
             components: [],
           });
@@ -154,19 +195,20 @@ export default async (client, message) => {
       .setTimestamp();
 
     if (message.content) embed.setDescription(message.content);
+
     if (message.attachments.size > 0) {
-      const first = message.attachments.first();
-      if (first.contentType?.startsWith("image/")) {
-        embed.setImage(first.url);
+      const file = message.attachments.first();
+      if (file.contentType?.startsWith("image/")) {
+        embed.setImage(file.url);
       } else {
-        embed.addFields({ name: "Attachment", value: first.url });
+        embed.addFields({ name: "Attachment", value: file.url });
       }
     }
 
-    const sent = await thread.send({ embeds: [embed] });
+    await thread.send({ embeds: [embed] });
     await message.react("✅");
   } catch (err) {
-    console.error("Failed to forward user message:", err);
+    console.error(err);
     await message.react("❌").catch(() => null);
   }
 };

@@ -1,47 +1,44 @@
 import { EmbedBuilder } from "discord.js";
 import getConfig from "../../utils/getConfig.js";
+import { modmailCache } from "./modmailSessions.js";
 import { prefixes } from "./handleCommands.js";
 
 export default async (client, message) => {
-  try {
-    if (message.author.bot) return;
-    if (prefixes.some((p) => message.content.startsWith(p))) return;
+  if (message.author.bot) return;
+  if (prefixes.some((p) => message.content.startsWith(p))) return;
 
+  try {
     const config = await getConfig();
 
-    if (
-      !message.channel.isThread() ||
-      message.channel.parentId !== config.modmailForumChannelId
-    )
-      return;
+    if (!message.channel.isThread()) return;
+    if (message.channel.parentId !== config.modmailChannelId) return;
 
-    const thread = message.channel;
-    const match = thread.name.match(/\((\d+)\)$/);
-    const userId = match ? match[1] : null;
-    if (!userId) return;
+    const match = message.channel.name.match(/\|\s(\d+)$/);
+    if (!match) return;
 
+    const userId = match[1];
     const user = await client.users.fetch(userId).catch(() => null);
     if (!user) return;
 
     const embed = new EmbedBuilder()
-      .setAuthor({ name: `Staff` })
+      .setAuthor({
+        name: `Staff`,
+        iconURL: message.guild.iconURL(),
+      })
       .setColor(0x5865f2)
       .setTimestamp();
 
     if (message.content) embed.setDescription(message.content);
+
     if (message.attachments.size > 0) {
-      const first = message.attachments.first();
-      if (first.contentType?.startsWith("image/")) {
-        embed.setImage(first.url);
-      } else {
-        embed.addFields({ name: "Attachment", value: first.url });
-      }
+      const file = message.attachments.first();
+      if (file.contentType?.startsWith("image/")) embed.setImage(file.url);
+      else embed.addFields({ name: "Attachment", value: file.url });
     }
 
-    const sent = await user.send({ embeds: [embed] });
+    await user.send({ embeds: [embed] });
     await message.react("✅");
-  } catch (err) {
-    console.error("Failed to forward staff reply:", err);
+  } catch {
     await message.react("❌").catch(() => null);
   }
 };

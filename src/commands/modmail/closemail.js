@@ -14,7 +14,7 @@ export default {
 
       if (
         !message.channel.isThread() ||
-        message.channel.parentId !== config.modmailForumChannelId
+        message.channel.parentId !== config.modmailChannelId
       ) {
         return message.reply(
           "This command can only be used inside a modmail thread.",
@@ -23,34 +23,45 @@ export default {
 
       const thread = message.channel;
 
-      const match = thread.name.match(/\((\d+)\)$/);
-      const userId = match ? match[1] : null;
-
-      if (userId) modmailCache.delete(userId);
-
-      if (userId) {
-        const user = await client.users.fetch(userId).catch(() => null);
-        if (user) {
-          await user
-            .send({
-              embeds: [
-                new EmbedBuilder()
-                  .setTitle("Modmail Closed")
-                  .setDescription(
-                    "Your modmail thread has been closed. Feel free to open another one if you need help.",
-                  )
-                  .setColor(0x5865f2),
-              ],
-            })
-            .catch(() => null);
-        }
+      const match = thread.name.match(/\|\s(\d+)$/);
+      if (!match) {
+        return message.reply("Could not determine the user for this thread.");
       }
 
-      await thread.send("🔒 Modmail closed. This thread will now be deleted.");
+      const userId = match[1];
 
-      await thread.delete().catch(() => null);
+      modmailCache.delete(userId);
+
+      const user = await client.users.fetch(userId).catch(() => null);
+
+      if (user) {
+        await user
+          .send({
+            embeds: [
+              new EmbedBuilder()
+                .setTitle("Modmail Closed")
+                .setDescription(
+                  "Your modmail has been closed. You can open a new one anytime.",
+                )
+                .setColor(0xff4d4d),
+            ],
+          })
+          .catch(() => null);
+      }
+
+      await thread.send({
+        embeds: [
+          new EmbedBuilder()
+            .setDescription("🔒 Modmail closed")
+            .setColor(0xff4d4d),
+        ],
+      });
+
+      await thread.setLocked(true);
+      await thread.setArchived(true);
     } catch (err) {
       console.error("Closemail error:", err);
+
       if (message.channel) {
         message.channel
           .send("Failed to close modmail thread.")
