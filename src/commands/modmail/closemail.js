@@ -23,12 +23,9 @@ export default {
 
       const thread = message.channel;
 
-      const match = thread.name.match(/\|\s(\d+)$/);
-      if (!match) {
-        return message.reply("Could not determine the user for this thread.");
-      }
-
-      const userId = match[1];
+      const parentMessage = await thread.fetchStarterMessage();
+      const embed = parentMessage.embeds[0];
+      const userId = embed.footer.text.split("uid: ")[1];
 
       modmailCache.delete(userId);
 
