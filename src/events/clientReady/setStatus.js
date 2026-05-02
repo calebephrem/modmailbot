@@ -1,7 +1,7 @@
 import { ActivityType } from "discord.js";
 
 export default (client) => {
-  client.user.setPresence({
+  const opts = {
     activities: [
       {
         name: "DM to contact staff",
@@ -9,5 +9,12 @@ export default (client) => {
       },
     ],
     status: "playing",
-  });
+  };
+  client.user.setPresence(opts);
+  setInterval(
+    () => {
+      client.user.setPresence(opts);
+    },
+    60 * 60 * 1000,
+  );
 };
